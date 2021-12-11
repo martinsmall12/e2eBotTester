@@ -21,12 +21,12 @@ router.post('/', async function (req, res, next) {
     if (type === TYPING) {
         res.send(200)
     } else {
-        if (transcript[index].Direction ===  IN) {
+        if (transcript[index]?.Direction === IN) {
             await fetch(`${apiUrl}/api/messages/custom?code=${process.env.AUTH_CODE}`, {
                 method: 'post',
                 body: JSON.stringify({
                     "type": "message",
-                    "text": transcript[index].Text,
+                    "text": transcript[index]?.Text,
                     "address": {
                         "user": {
                             "id": testId
@@ -39,30 +39,31 @@ router.post('/', async function (req, res, next) {
                 }),
                 headers: {'Content-Type': 'application/json'}
             });
-            data.set(testId, {...temporaryData, index: index+2 })
-            res.json(200)
-        } else if (transcript[index].Direction === OUT) {
-            if(!attachments && !isEmpty(text)){
-                if(text !== transcript[index].Text ){
-                    mainRes.json({ error: 'Messages is not equals'})
+            data.set(testId, {...temporaryData, index: index + 2})
+            res.send(200)
+        } else if (transcript[index]?.Direction === OUT) {
+            if (!attachments && !isEmpty(text)) {
+                if (text !== transcript[index]?.Text) {
+                    mainRes.json({error: `Message: ${text} not equals message: ${transcript[index].Text} `})
+                    res.send(304)
                 }
             }
 
-
-            if(transcript.length === index+1) {
-                mainRes.json({ info: 'Testing was successful.'})
+            if (transcript.length === index + 1) {
+                mainRes.json({info: 'Testing was successful.'})
+                res.send(200)
             }
 
-            if(transcript[index+1].Direction === OUT){
-                data.set(testId, {...temporaryData, index: index+1 })
-                res.json(200)
+            if (transcript[index + 1]?.Direction === OUT) {
+                data.set(testId, {...temporaryData, index: index + 1})
+                res.send(200)
 
             } else {
                 await fetch(`${apiUrl}/api/messages/custom?code=${process.env.AUTH_CODE}`, {
                     method: 'post',
                     body: JSON.stringify({
                         "type": "message",
-                        "text": transcript[index+1].Text,
+                        "text": transcript[index + 1]?.Text,
                         "address": {
                             "user": {
                                 "id": testId
@@ -75,11 +76,11 @@ router.post('/', async function (req, res, next) {
                     }),
                     headers: {'Content-Type': 'application/json'}
                 });
-                data.set(testId, {...temporaryData, index: index+2 })
+                data.set(testId, {...temporaryData, index: index + 2})
+                res.send(200)
             }
         }
     }
-
 });
 
 module.exports = router;
