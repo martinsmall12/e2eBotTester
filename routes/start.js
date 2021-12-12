@@ -4,8 +4,11 @@ const fetch = require('node-fetch')
 const data = require('../src/temporaryData');
 const makeId = require('../src/utils');
 const {compose, reverse, reject, propEq, both} = require('ramda');
+const beginIntroDialog = require("../src/beginIntroDialog");
+const url = require("url");
 
-const reverseAndFilterEmptyMessages = compose(reject(both(propEq('Text', ''), propEq('Direction', 'in'))), reverse);
+const removeTestInfoMessage = reject(propEq('Text', 'Chatbot je spuštěn v TESTOVACÍM režimu, žádné emaily nebudou odesílány.'))
+const reverseAndFilterEmptyMessages = compose(removeTestInfoMessage, reject(both(propEq('Text', ''), propEq('Direction', 'in'))), reverse);
 
 router.post('/', async function (req, res, next) {
     const {apiUrl, userId} = req.query;
@@ -23,33 +26,9 @@ router.post('/', async function (req, res, next) {
     }
 
     const transcript = reverseAndFilterEmptyMessages(reversedTranscript);
+    await beginIntroDialog(apiUrl, testId, req.headers.host)
 
-    await fetch(`${apiUrl}/api/messages/custom?code=${process.env.AUTH_CODE}`, {
-        method: 'post',
-        body: JSON.stringify({
-            "type": "event",
-            "name": "beginIntroDialog",
-            "address": {
-                "user": {
-                    "id": testId
-                },
-                "conversation": {
-                    "id": testId
-                },
-                "serviceUrl": `http://localhost:3000/messages?testId=${testId}`
-            },
-            "channelData": {
-                "id": "intro-dialog",
-                "userData": {
-                    "email": "some@email.com"
-                },
-            }
-        }),
-        headers: {'Content-Type': 'application/json'}
-    });
-
-    data.set(testId, {mainRes: res, transcript, index: 1, apiUrl});
-
+    data.set(testId, {mainRes: res, transcript, index: 0, apiUrl});
 });
 
 module.exports = router;

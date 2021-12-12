@@ -2,19 +2,24 @@ const express = require('express');
 const router = express.Router();
 const fetch = require('node-fetch')
 const data = require("../src/temporaryData");
-const {isEmpty} = require('ramda');
+const {isEmpty, append} = require('ramda');
+const sendMessage = require("../src/sendMessage");
 
 const TYPING = 'typing';
 const DIRECTION = {OUT: 'out', IN: 'in'};
 
 const {IN, OUT} = DIRECTION;
+const appendMessage = (direction, text, attachments) => append({
+    direction,
+    timestamp: new Date(),
+    text,
+    attachments
+})
 
 router.post('/', async function (req, res, next) {
     const {testId} = req.query;
     const temporaryData = data.get(testId);
-    const {apiUrl, index, transcript, mainRes} = temporaryData;
-
-    console.log(req.body);
+    const {apiUrl, index, transcript, mainRes, conversation} = temporaryData;
 
     const {text, type, attachments} = req.body;
 
@@ -22,61 +27,53 @@ router.post('/', async function (req, res, next) {
         res.send(200)
     } else {
         if (transcript[index]?.Direction === IN) {
-            await fetch(`${apiUrl}/api/messages/custom?code=${process.env.AUTH_CODE}`, {
-                method: 'post',
-                body: JSON.stringify({
-                    "type": "message",
-                    "text": transcript[index]?.Text,
-                    "address": {
-                        "user": {
-                            "id": testId
-                        },
-                        "conversation": {
-                            "id": testId
-                        },
-                        "serviceUrl": `http://localhost:3000/messages?testId=${testId}`
-                    }
-                }),
-                headers: {'Content-Type': 'application/json'}
-            });
-            data.set(testId, {...temporaryData, index: index + 2})
+            await sendMessage(apiUrl, transcript[index]?.Text, testId, req.headers.host);
+            data.set(testId, {
+                ...temporaryData,
+                index: index + 2,
+                conversation: appendMessage(IN, transcript[index]?.Text)(conversation)
+            })
             res.send(200)
         } else if (transcript[index]?.Direction === OUT) {
             if (!attachments && !isEmpty(text)) {
                 if (text !== transcript[index]?.Text) {
-                    mainRes.json({error: `Message: ${text} not equals message: ${transcript[index].Text} `})
-                    res.send(304)
+                    const {apiUrl, index, transcript, conversation} = temporaryData;
+                    mainRes.json({
+                        error: `Message: ${text} not equals message: ${transcript[index].Text}`,
+                        data: {
+                            apiUrl,
+                            index,
+                            transcript,
+                            conversation: appendMessage(OUT, text, attachments)(conversation)
+                        }
+                    })
+                    res.send(200);
                 }
             }
 
             if (transcript.length === index + 1) {
-                mainRes.json({info: 'Testing was successful.'})
+                const {apiUrl, index, transcript, conversation} = temporaryData;
+                mainRes.json({
+                    info: 'Testing was successful.',
+                    data: {apiUrl, index, transcript, conversation: appendMessage(OUT, text, attachments)(conversation)}
+                });
                 res.send(200)
             }
 
             if (transcript[index + 1]?.Direction === OUT) {
-                data.set(testId, {...temporaryData, index: index + 1})
+                data.set(testId, {
+                    ...temporaryData, index: index + 1,
+                    conversation: appendMessage(OUT, text, attachments)(conversation)
+                })
                 res.send(200)
 
-            } else {
-                await fetch(`${apiUrl}/api/messages/custom?code=${process.env.AUTH_CODE}`, {
-                    method: 'post',
-                    body: JSON.stringify({
-                        "type": "message",
-                        "text": transcript[index + 1]?.Text,
-                        "address": {
-                            "user": {
-                                "id": testId
-                            },
-                            "conversation": {
-                                "id": testId
-                            },
-                            "serviceUrl": `http://localhost:3000/messages?testId=${testId}`
-                        }
-                    }),
-                    headers: {'Content-Type': 'application/json'}
-                });
-                data.set(testId, {...temporaryData, index: index + 2})
+            } else if (transcript[index + 1]?.Direction === IN) {
+                await sendMessage(apiUrl, transcript[index + 1]?.Text, testId, req.headers.host);
+                data.set(testId, {
+                    ...temporaryData,
+                    index: index + 2,
+                    conversation: appendMessage(IN, transcript[index + 1]?.Text, attachments)(conversation)
+                })
                 res.send(200)
             }
         }
