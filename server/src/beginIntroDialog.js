@@ -17,9 +17,7 @@ const beginIntroDialog = async (apiUrl, testId, ownUrl) => {
             },
             "channelData": {
                 "id": "intro-dialog",
-                "userData": {
-                    "email": "some@email.com"
-                },
+                "userData": {},
             }
         }),
         headers: {'Content-Type': 'application/json'}

@@ -26,9 +26,9 @@ router.post('/', async function (req, res, next) {
     }
 
     const transcript = reverseAndFilterEmptyMessages(reversedTranscript);
-    await beginIntroDialog(apiUrl, testId, req.headers.host)
 
-    data.set(testId, {mainRes: res, transcript, index: 0, apiUrl});
+    data.set(testId, {mainRes: res, transcript, index: 0, apiUrl, timeout: setTimeout(() => res.json({ error: 'timeout' }), 3000)});
+    await beginIntroDialog(apiUrl, testId, req.headers.host)
 });
 
 module.exports = router;
