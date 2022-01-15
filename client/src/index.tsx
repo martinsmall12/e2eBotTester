@@ -5,9 +5,10 @@ import Button from '@mui/material/Button';
 import CssBaseline from '@mui/material/CssBaseline';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
+import {MessageLeft, MessageRight} from './chat/message';
+import Stack from '@mui/material/Stack';
+import Alert from '@mui/material/Alert';
 
-//const getConversation = path(['data', 'conversation']);
 
 interface State {
     apiUrl: string;
@@ -18,12 +19,12 @@ interface DataType {
     conversation: any[],
     transcript: any[],
     index: number,
-    info?: string,
-    error?: string
 }
 
 interface BodyType {
     data: DataType
+    info?: string,
+    error?: string
 }
 
 const Homepage = () => {
@@ -65,19 +66,33 @@ const Homepage = () => {
         <React.Fragment>
             <CssBaseline/>
             <Container maxWidth="xl">
-                <Box sx={{bgcolor: '#cfe8fc', height: '20vh'}}>
+                <Box sx={{bgcolor: '#cfe8fc', height: '20vh', padding: '10px'}}>
+                    <Stack direction="row" spacing={1}>
+                        <TextField id="standard-basic" label="Api URL" variant="standard"
+                                   onChange={handleChange('apiUrl')}
+                                   value={values.apiUrl}/>
+                        <TextField id="standard-basic" label="User Id" variant="standard"
+                                   onChange={handleChange('userId')}
+                                   value={values.userId}/>
+                        <Button variant="outlined" onClick={handleTestBot} disabled={loading}>Run bot tester</Button>
+                    </Stack>
                     {error && (
-                        <p>{error}</p>
+                        <Alert severity="error">{error}</Alert>
                     )}
-                    <TextField id="standard-basic" label="Api URL" variant="standard" onChange={handleChange('apiUrl')}
-                               value={values.apiUrl}/>
-                    <TextField id="standard-basic" label="User Id" variant="standard" onChange={handleChange('userId')}
-                               value={values.userId}/>
-                    <Button variant="outlined" onClick={handleTestBot} disabled={loading}>Run bot tester</Button>
+                    {data?.error && (
+                        <Alert severity="error">{data?.error}</Alert>
+                    )}
+                    {data?.info && (
+                        <Alert severity="success">{data?.info}</Alert>
+                    )}
                 </Box>
-                <Box sx={{bgcolor: '#0f395a', height: '80vh'}}>
-                    {data?.data?.conversation?.map((message: any) => (
-                            <Chip label={message.text} color={message.direction === 'out' ? 'primary' : 'secondary'}/>
+                <Box sx={{bgcolor: '#0f395a', height: '80vh', padding: '10px', marginTop: '10px'}}>
+                    {data?.data?.conversation?.map((message: any, index) => (
+                            message.direction === 'out' ? (
+                                <MessageLeft text={message.text} timestamp={message.timestamp} key={`${index}`}
+                                             attachments={message.attachments}/>) : (
+                                <MessageRight text={message.text} timestamp={message.timestamp} key={`${index}`}
+                                              attachments={message.attachments}/>)
                         )
                     )}
                 </Box>

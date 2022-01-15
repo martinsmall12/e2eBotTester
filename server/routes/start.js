@@ -5,7 +5,6 @@ const data = require('../src/temporaryData');
 const makeId = require('../src/utils');
 const {compose, reverse, reject, propEq, both} = require('ramda');
 const beginIntroDialog = require("../src/beginIntroDialog");
-const url = require("url");
 
 const removeTestInfoMessage = reject(propEq('Text', 'Chatbot je spuštěn v TESTOVACÍM režimu, žádné emaily nebudou odesílány.'))
 const reverseAndFilterEmptyMessages = compose(removeTestInfoMessage, reject(both(propEq('Text', ''), propEq('Direction', 'in'))), reverse);

@@ -74,12 +74,13 @@ router.post('/', async function (req, res, next) {
                 res.send(200)
 
             } else if (transcript[index + 1]?.Direction === IN) {
+                const conversationWithOutMessage = appendMessage(OUT, transcript[index]?.Text, attachments)(conversation);
                 await sendMessage(apiUrl, transcript[index + 1]?.Text, testId, req.headers.host);
                 clearTimeout(timeout)
                 data.set(testId, {
                     ...temporaryData,
                     index: index + 2,
-                    conversation: appendMessage(IN, transcript[index + 1]?.Text, attachments)(conversation),
+                    conversation: appendMessage(IN, transcript[index + 1]?.Text, attachments)(conversationWithOutMessage),
                     timeout: setTimeout(() => mainRes.json({ error: 'timeout' }), TIME_OF_TIMEOUT)
                 })
                 res.send(200)
