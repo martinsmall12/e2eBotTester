@@ -1,92 +1,125 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
 const data = require("../src/temporaryData");
-const {isEmpty, append} = require('ramda');
+const { compose } = require("ramda");
 const sendMessage = require("../src/sendMessage");
+const { DIRECTION, TYPING, INTEGRATION } = require("../src/constants");
+const {
+  setDataAndClearTimeoutSendRes,
+  appendMessage,
+  responseErrorIfNotEqualsMessages,
+  responseSuccess,
+  omitAttributesForEquals,
+  responseErrorIfIntegrationNotEqualsTranscript,
+} = require("../src/utils");
 
-const TYPING = 'typing';
-const DIRECTION = {OUT: 'out', IN: 'in'};
+const { IN, OUT } = DIRECTION;
 
-const TIME_OF_TIMEOUT = 3000;
+const isEndOfTranscript = (transcript, index) =>
+  transcript.length === index + 1;
 
-const {IN, OUT} = DIRECTION;
-const appendMessage = (direction, text, attachments) => append({
-    direction,
-    timestamp: new Date(),
-    text,
-    attachments
-})
+router.post("/", async function (req, res, next) {
+  const { testId } = req.query;
+  const temporaryData = data.get(testId);
+  const { apiUrl, index, transcript } = temporaryData;
 
-router.post('/', async function (req, res, next) {
-    const {testId} = req.query;
-    const temporaryData = data.get(testId);
-    const {apiUrl, index, transcript, mainRes, conversation, timeout} = temporaryData;
+  const { text, type } = req.body;
 
-    const {text, type, attachments} = req.body;
+  if (type === TYPING) {
+    res.sendStatus(200);
+  } else {
+    if (type === INTEGRATION || transcript[index]?.Type === INTEGRATION) {
+      if (type !== INTEGRATION) {
+        responseErrorIfIntegrationNotEqualsTranscript(
+          temporaryData,
+          res,
+          req.body,
+          type
+        );
+      } else if (
+        type === INTEGRATION &&
+        transcript[index]?.Type === INTEGRATION
+      ) {
+        setDataAndClearTimeoutSendRes(
+          testId,
+          temporaryData,
+          res,
+          1,
+          appendMessage({
+            direction: INTEGRATION,
+            text: transcript[index]?.ResponseBody,
+            url: transcript[index]?.Url,
+          }),
+          {
+            ...transcript[index]?.ResponseBody,
+          }
+        );
+      }
+    } else if (transcript[index]?.Direction === IN) {
+      await sendMessage(
+        apiUrl,
+        transcript[index]?.Text,
+        testId,
+        req.headers.host
+      );
+      setDataAndClearTimeoutSendRes(
+        testId,
+        temporaryData,
+        res,
+        2,
+        appendMessage({
+          direction: IN,
+          text: transcript[index]?.Text,
+        })
+      );
+    } else if (transcript[index]?.Direction === OUT) {
+      const omitReqBody = omitAttributesForEquals(req.body);
 
-    if (type === TYPING) {
-        res.send(200)
-    } else {
-        if (transcript[index]?.Direction === IN) {
-            await sendMessage(apiUrl, transcript[index]?.Text, testId, req.headers.host);
-            clearTimeout(timeout)
-            data.set(testId, {
-                ...temporaryData,
-                index: index + 2,
-                conversation: appendMessage(IN, transcript[index]?.Text)(conversation),
-                timeout: setTimeout(() => mainRes.json({ error: 'timeout' }), TIME_OF_TIMEOUT)
-            })
-            res.send(200)
-        } else if (transcript[index]?.Direction === OUT) {
-            clearTimeout(timeout)
-            if (!attachments && !isEmpty(text)) {
-                if (text !== transcript[index]?.Text) {
-                    const {apiUrl, index, transcript, conversation} = temporaryData;
-                    mainRes.json({
-                        error: `Message: ${text} not equals message: ${transcript[index].Text}`,
-                        data: {
-                            apiUrl,
-                            index,
-                            transcript,
-                            conversation: appendMessage(OUT, text, attachments)(conversation)
-                        }
-                    })
-                    res.send(200);
-                }
-            }
+      responseErrorIfNotEqualsMessages(temporaryData, text, res, omitReqBody);
 
-            if (transcript.length === index + 1) {
-                const {apiUrl, index, transcript, conversation} = temporaryData;
-                mainRes.json({
-                    info: 'Testing was successful.',
-                    data: {apiUrl, index, transcript, conversation: appendMessage(OUT, text, attachments)(conversation)}
-                });
-                res.send(200)
-            }
+      if (transcript[index + 1]?.Direction === OUT) {
+        setDataAndClearTimeoutSendRes(
+          testId,
+          temporaryData,
+          res,
+          1,
+          appendMessage({
+            direction: OUT,
+            message: omitReqBody,
+          })
+        );
+      } else if (transcript[index + 1]?.Direction === IN) {
+        const appendOutInMessages = compose(
+          appendMessage({
+            direction: IN,
+            text: transcript[index + 1]?.Text,
+          }),
+          appendMessage({
+            direction: OUT,
+            message: omitReqBody,
+          })
+        );
 
-            if (transcript[index + 1]?.Direction === OUT) {
-                clearTimeout(timeout)
-                data.set(testId, {
-                    ...temporaryData, index: index + 1,
-                    conversation: appendMessage(OUT, text, attachments)(conversation),
-                    timeout: setTimeout(() => mainRes.json({ error: 'timeout' }), TIME_OF_TIMEOUT)
-                })
-                res.send(200)
+        await sendMessage(
+          apiUrl,
+          transcript[index + 1]?.Text,
+          testId,
+          req.headers.host
+        );
+        setDataAndClearTimeoutSendRes(
+          testId,
+          temporaryData,
+          res,
+          2,
+          appendOutInMessages
+        );
+      }
 
-            } else if (transcript[index + 1]?.Direction === IN) {
-                const conversationWithOutMessage = appendMessage(OUT, transcript[index]?.Text, attachments)(conversation);
-                await sendMessage(apiUrl, transcript[index + 1]?.Text, testId, req.headers.host);
-                clearTimeout(timeout)
-                data.set(testId, {
-                    ...temporaryData,
-                    index: index + 2,
-                    conversation: appendMessage(IN, transcript[index + 1]?.Text, attachments)(conversationWithOutMessage),
-                    timeout: setTimeout(() => mainRes.json({ error: 'timeout' }), TIME_OF_TIMEOUT)
-                })
-                res.send(200)
-            }
-        }
+      if (isEndOfTranscript(transcript, index)) {
+        responseSuccess(temporaryData, res, text, req.body);
+      }
     }
+  }
 });
 
 module.exports = router;
